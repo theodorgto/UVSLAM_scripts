@@ -27,18 +27,39 @@ def compute_plane_inliers(pcd, distance_threshold, ransac_n, num_iterations):
 
 def visualize_plane(pcd, inlier_indices):
     """
-    Given an Open3D point cloud `pcd` and a list of `inlier_indices`,
-    paint plane‐inliers red and everything else gray, then show the result
-    alongside a coordinate frame at the origin.
+    Given an Open3D point cloud `pcd` and a list (or array) of `inlier_indices`,
+    paint plane‐inliers red, and leave all other points in their original colors
+    (if present) or white (if `pcd` had no colors). Then show the result alongside
+    a coordinate frame at the origin.
     """
     # Make a copy so we don't overwrite the original
     colored = o3d.geometry.PointCloud(pcd)
-    N = len(colored.points)
-    colors = np.tile([0.5, 0.5, 0.5], (N, 1))  # default gray
 
-    # Paint inliers red
+    N = np.asarray(colored.points).shape[0]
+    # Prepare colors array: if original had colors, reuse them; otherwise initialize to white
+    if colored.has_colors():
+        # Get a numpy array view of the original colors
+        colors = np.asarray(colored.colors).copy()
+        # In case colors shape mismatches number of points, fall back to white
+        if colors.shape[0] != N:
+            colors = np.ones((N, 3))
+    else:
+        # No original colors: initialize all to white
+        colors = np.ones((N, 3))
+
+    # Paint only the inliers red
+    # Ensure inlier_indices is an array of ints
+    inlier_indices = np.asarray(inlier_indices, dtype=int)
+    # Filter out any indices out of range, just in case
+    valid_mask = (inlier_indices >= 0) & (inlier_indices < N)
+    if not np.all(valid_mask):
+        import warnings
+        warnings.warn("Some inlier_indices are out of range [0, N). They will be ignored.")
+    inlier_indices = inlier_indices[valid_mask]
     colors[inlier_indices, :] = np.array([1.0, 0.0, 0.0])
-    colored.colors = o3d.utility.Vector3dVector(colors)
+
+    # Assign back to the point cloud
+    # colored.colors = o3d.utility.Vector3dVector(colors)
 
     # Add a little coordinate frame at (0,0,0)
     origin_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
@@ -47,7 +68,7 @@ def visualize_plane(pcd, inlier_indices):
 
     o3d.visualization.draw_geometries(
         [colored, origin_frame],
-        window_name="Plane Inliers (red) vs. Rest (gray)",
+        window_name="Plane Inliers (red) only; others unchanged",
         width=800,
         height=600
     )
@@ -59,13 +80,13 @@ def main():
     parser.add_argument(
         "--dataset_path",
         type=str,
-        default="data/recording",
+        default="data/recording_denoise",
         help="Folder containing .ply frames"
     )
     parser.add_argument(
         "--ransac_dist",
         type=float,
-        default=0.02,
+        default=0.05,
         help="RANSAC distance threshold (in meters) for plane inliers"
     )
     parser.add_argument(
@@ -77,7 +98,7 @@ def main():
     parser.add_argument(
         "--ransac_iter",
         type=int,
-        default=1000,
+        default=3000,
         help="Number of RANSAC iterations"
     )
     parser.add_argument(
@@ -98,7 +119,7 @@ def main():
         return
 
     print("Filename, N_total, N_plane_inliers, Percent_plane (%)")
-    files = files[:100]  # Limit to first 100 files for performance
+    files = files[30:100]  # Limit to first 100 files for performance
 
     avg_percent_plane = 0.0
 

@@ -3,13 +3,14 @@ import open3d
 
 def main():
     # Simply load the saved map and display it
-    pcd = open3d.io.read_point_cloud("map.ply")
+    path = "/home/armjetson/nvme/test_outputs/cloud_denoise.ply"
+    pcd = open3d.io.read_point_cloud(path)
     if pcd.is_empty():
         print("ERROR: 'map.ply' is empty or not found.")
         return
 
     # You can set a uniform color, or comment out to show per‐vertex colors (if any)
-    pcd.paint_uniform_color([0.8, 0.3, 0.1])  # a reddish/orange hue
+    # pcd.paint_uniform_color([0.8, 0.3, 0.1])  # a reddish/orange hue
 
     open3d.visualization.draw_geometries(
         [pcd],
